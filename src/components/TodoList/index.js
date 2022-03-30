@@ -23,7 +23,7 @@ async function fetchTodos(page) {
   const data = await response.json();
   return data;
 }
-async function addTodos(newTodo) {
+async function addTodo(newTodo) {
   const response = await fetch(`https://jsonplaceholder.typicode.com/todos`, {
     method: 'POST',
     body: JSON.stringify(newTodo),
@@ -56,7 +56,7 @@ export default function TodoList() {
   });
   //   console.log(todos);
 
-  const mutation = useMutation(newTodo => addTodos(newTodo));
+  const mutation = useMutation(newTodo => addTodo(newTodo));
 
   const handleAddTodo = () => {
     mutation.mutate({ id: new Date(), title: title, completed: false });
@@ -75,7 +75,7 @@ export default function TodoList() {
         bg="white"
         position="relative"
       >
-        <Heading textAlign="center">Todo App</Heading>
+        <Heading textAlign="center">React-Query</Heading>
 
         <Box w="100%" h="450px" mt="5" overflowY="auto">
           {isLoading && (
