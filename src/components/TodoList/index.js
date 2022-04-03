@@ -8,58 +8,65 @@ import {
   List,
   Spinner,
 } from '@chakra-ui/react';
-import React, { useEffect, useRef, useState } from 'react';
-import { AiFillCaretLeft, AiFillCaretRight } from 'react-icons/ai';
+import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
+import { addTodo, deleteTodo, fetchTodos } from '../../api/todoApi';
 import TodoItem from '../TodoItem';
-
-async function fetchTodos(page) {
-  const response = await fetch(
-    `https://jsonplaceholder.typicode.com/todos?_limit=10&_page=${page}`,
-    {
-      method: 'GET',
-    }
-  );
-  const data = await response.json();
-  return data;
-}
-async function addTodo(newTodo) {
-  const response = await fetch(`https://jsonplaceholder.typicode.com/todos`, {
-    method: 'POST',
-    body: JSON.stringify(newTodo),
-  });
-  const data = await response.json();
-  return data;
-}
 
 export default function TodoList() {
   const [title, setTitle] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const nameRef = useRef(null);
 
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    queryClient.prefetchQuery(['todos', currentPage + 1], () =>
-      fetchTodos(currentPage + 1)
-    );
-  }, [currentPage, queryClient]);
 
   const {
     data: todos,
     isLoading,
     isError,
     error,
-  } = useQuery(['todos', currentPage], () => fetchTodos(currentPage), {
+  } = useQuery('todos', () => fetchTodos(), {
     keepPreviousData: true,
   });
-  //   console.log(todos);
 
-  const mutation = useMutation(newTodo => addTodo(newTodo));
+  const addMutation = useMutation(newTodo => addTodo(newTodo), {
+    onMutate: async newTodo => {
+      await queryClient.cancelQueries('todos');
+      const preTodos = queryClient.getQueryData('todos');
+      queryClient.setQueryData('todos', oldTodos => [...oldTodos, newTodo]);
+      // console.log(preTodos);
+      return { preTodos };
+    },
+    onError: (err, newTodo, context) => {
+      queryClient.setQueryData('todos', context.preTodos);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries('todos');
+    },
+  });
+  const deleteMutation = useMutation(id => deleteTodo(id), {
+    onMutate: async id => {
+      await queryClient.cancelQueries('todos');
+      const preTodos = queryClient.getQueryData('todos');
+      queryClient.setQueryData('todos', oldTodos => {
+        return oldTodos.filter(todo => todo.id !== id);
+      });
+      // console.log(preTodos);
+      return { preTodos };
+    },
+    onError: (err, newTodo, context) => {
+      queryClient.setQueryData('todos', context.preTodos);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries('todos');
+    },
+  });
 
   const handleAddTodo = () => {
-    mutation.mutate({ id: new Date(), title: title, completed: false });
+    addMutation.mutate({ id: new Date(), title: title, completed: false });
+    setTitle('');
+  };
+
+  const handleDeleteTodo = id => {
+    deleteMutation.mutate(id);
     setTitle('');
   };
 
@@ -91,33 +98,15 @@ export default function TodoList() {
           {isError && <Box>{error.message}</Box>}
 
           <List spacing={3}>
-            {todos && todos.map(todo => <TodoItem key={todo.id} todo={todo} />)}
+            {todos &&
+              todos.map(todo => (
+                <TodoItem
+                  key={todo.id}
+                  todo={todo}
+                  onDeleteTodo={handleDeleteTodo}
+                />
+              ))}
           </List>
-        </Box>
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          p={4}
-        >
-          <Button
-            leftIcon={<AiFillCaretLeft />}
-            colorScheme="teal"
-            variant="solid"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(currentPage - 1)}
-          >
-            Previous Page
-          </Button>
-          <Button
-            rightIcon={<AiFillCaretRight />}
-            colorScheme="teal"
-            variant="solid"
-            disabled={currentPage >= 20}
-            onClick={() => setCurrentPage(currentPage + 1)}
-          >
-            Next Page
-          </Button>
         </Box>
         <FormControl
           display="flex"
@@ -127,7 +116,6 @@ export default function TodoList() {
           p="24px"
         >
           <Input
-            ref={nameRef}
             mr="4px"
             value={title}
             onChange={e => {
@@ -136,13 +124,13 @@ export default function TodoList() {
           />
 
           <Button
-            isLoading={mutation.isLoading}
-            loadingText="Submitting"
+            isLoading={addMutation.isLoading}
+            loadingText="Adding..."
             colorScheme="teal"
             variant="outline"
             onClick={handleAddTodo}
           >
-            Submit
+            Add
           </Button>
         </FormControl>
       </Box>
